@@ -38,8 +38,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // 🎯 紀錄當前的日期字串，用來比對是否跨日
     let mut current_date_str = String::new();
 
+    println!("=== 🇹🇼 臺灣公開資訊觀測站 智慧內嵌超連結巡檢系統啟動 ===");
     println!("=== 🇹🇼 臺灣公開資訊觀測站 10分鐘定時增量巡檢系統啟動 ===");
-
     // 🎯 核心無限循環監控：每 10 分鐘自動執行一次
     loop {
         // 1. 動態獲取當前最新的系統日期（自動換算為臺灣民國年）
@@ -51,8 +51,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // 組合當天的比對標籤，例: "115_08_24"
         let check_date_str = format!("{}_{}_{}", query_year, query_month, query_day);
 
-        // -----------------------------------------------------------------
-        // 🎯 需求 2 修正：當日期變更為新的一天 (New Day)，自動清空 visited 集合
+        // --------------------------------────────────────-----------------
+        // 🎯 跨日自動切換：當日期變更為新的一天 (New Day)
         // -----------------------------------------------------------------
         if current_date_str != check_date_str {
             println!("\n📅 ──────────────────────────────────────────────────");
@@ -65,9 +65,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             println!("────────────────────────────────────────────────────\n");
         }
 
-        // -----------------------------------------------------------------
-        // 🎯 需求 1 修正：CSV 檔名完美綁定當天動態年月日
-        // -----------------------------------------------------------------
+        // 🎯 檔名完美依需求 1 綁定當天動態年月日
         let csv_path = format!("mops_report_{}_{}_{}.csv", query_year, query_month, query_day);
 
         // -----------------------------------------------------------------
@@ -83,6 +81,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 if let Ok(record) = result {
                     // 確保欄位長度正確才解析，避免讀取到空白行損壞
                     if record.len() >= 5 {
+                        // 讀取 CSV 中的公司代號與發言時間
                         let time = record[1].trim();
                         let code = record[2].trim();
                         // 還原唯一識別碼格式: 公司代號_發言時間
@@ -95,8 +94,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             println!("✅ 今日索引重建成功！已自動同步過濾 {} 筆歷史重大訊息。", history_count);
         }
 
-
-        // 初始化當天專屬的 CSV 檔案（如果檔案不存在就建立並寫入 Excel 不亂碼的 BOM 與表頭）
+        // 初始化當天專屬的 CSV 檔案（若不存在則建立並加入不亂碼 BOM 頭與表頭）
         if !Path::new(&csv_path).exists() {
             println!("📝 正在建立今日專屬 CSV 資料庫：{}", csv_path);
             let file = std::fs::File::create(&csv_path)?;
@@ -104,9 +102,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             use std::io::Write as _;
             buffered_file.write_all(b"\xEF\xBB\xBF")?; // 寫入 Excel 識別專用的 BOM 頭
             let mut csv_writer = csv::Writer::from_writer(buffered_file);
-            csv_writer.write_record(&["發言日期", "發言時間", "公司代號", "公司簡稱", "主旨"])?;
+            // 🎯 欄位最尾端加入「詳細內文連結」欄位
+            csv_writer.write_record(&["發言日期", "發言時間", "公司代號", "公司簡稱", "主旨", "詳細內文連結"])?;
             csv_writer.flush()?;
-        } 
+        }
 
         println!("🕒 [{}] 正在發起常規巡檢...", now.format("%Y-%m-%d %H:%M:%S"));
 
@@ -143,7 +142,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tokio::time::sleep(sleep_duration).await;
     }
 }
-
 
 /// 核心爬取、清洗與增量過濾函數
 async fn fetch_and_parse_mops(
@@ -201,6 +199,15 @@ async fn fetch_and_parse_mops(
     let mut new_records_count = 0;
 
     for row in document.select(&row_selector) {
+        // 🎯 核心升級：同時提取內部的隱藏 inputs 欄位（用來獲取詳細內文所需跳轉的加密參數，如 i / TYPEK / pgname）
+        let mut input_params: HashMap<String, String> = HashMap::new();
+        let sub_input_selector = Selector::parse("input[type='hidden']").unwrap();
+        for input in row.select(&sub_input_selector) {
+            if let (Some(name), Some(value)) = (input.value().attr("name"), input.value().attr("value")) {
+                input_params.insert(name.to_string(), value.to_string());
+            }
+        }
+
         let cells: Vec<String> = row
             .select(&cell_selector)
             .map(|cell| {
@@ -230,15 +237,35 @@ async fn fetch_and_parse_mops(
                 if !visited.contains(&unique_key) {
                     visited.insert(unique_key);
 
-                    // 實時追加寫入當天 CSV
-                    csv_writer.write_record(&[date, time, code, name, subject])?;
+                    // -----------------------------------------------------------------
+                    // 🎯 核心功能新增：動態推導並構造 Excel 專用的內嵌超連結公式
+                    // -----------------------------------------------------------------
+                    // 提取網頁表單中的動態序列參數，若提取不到則自動補齊安全預設值
+                    let param_i = input_params.get("i").cloned().unwrap_or_else(|| "173".to_string());
+                    let param_typek = input_params.get("TYPEK").cloned().unwrap_or_else(|| "rotc".to_string());
+                    let param_h1732 = input_params.get("h1732").cloned().unwrap_or_else(|| "".to_string());
+                    let param_h1733 = input_params.get("h1733").cloned().unwrap_or_else(|| "".to_string());
 
-                    let truncated_subject = if subject.chars().count() > 35 {
-                        format!("{}...", subject.chars().take(35).collect::<String>())
-                    } else {
-                        subject.to_string()
-                    };
-                    
+                    // 完美組裝官方 2026 最新版 RWD 重訊公告內文直連網址介面
+                    let detail_url = format!(
+                        "https://twse.com.tw?encodeURIComponent=1&step=1&firstin=1&off=1&pgname=t05st02&co_id={}&i={}&TYPEK={}&h1732={}&h1733={}",
+                        code, param_i, param_typek, param_h1732, param_h1733
+                    );
+
+                    // 轉化為 Excel 專屬的自動公式字符串，格式為: =HYPERLINK("網址", "顯示名稱")
+                    let excel_hyperlink_formula = format!(
+                        "=HYPERLINK(\"{}\", \"點我開啟詳細重訊公文\")",
+                        detail_url
+                    );
+                    // -----------------------------------------------------------------
+                    // 實時追加寫入當天 CSV（內含超連結欄位）
+                    csv_writer.write_record(&[date, time, code, name, subject, &excel_hyperlink_formula])?;
+                    let truncated_subject = 
+                        if subject.chars().count() > 35 {
+                            format!("{}...", subject.chars().take(35).collect::<String>())
+                        } else {
+                            subject.to_string()
+                        };
                     println!(" 🆕 [新重訊] {}\t{}\t{}\t{:<10}\t{}", date, time, code, name, truncated_subject);
                     new_records_count += 1;
                 }

@@ -188,6 +188,7 @@ async fn fetch_and_parse_mops(
 
     let res_obj = client.post(api_url).form(&params).send().await.map_err(|e| Box::new(e) as Box<dyn Error>)?;
     let response_text = res_obj.text().await.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+    println!("response_text = {}", response_text);
     
     // 載入 DOM 樹進行網頁數據格子清洗
     let document = Html::parse_document(&response_text);
