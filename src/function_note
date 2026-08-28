@@ -1,0 +1,24 @@
+=== 📈 成功解析常用報表選單 ===
+📋 功能: 公司基本資料               ➡️  代號 (Action Code): t05st03
+📋 功能: 月營業收入資訊              ➡️  代號 (Action Code): t05st10_ifrs
+📋 功能: 即時重大訊息               ➡️  代號 (Action Code): t05sr01_1
+📋 功能: 當日重大訊息               ➡️  代號 (Action Code): t05st02
+📋 功能: 歷史重大訊息               ➡️  代號 (Action Code): t05st01
+📋 功能: 財務報告公告               ➡️  代號 (Action Code): t163sb01
+📋 功能: 資產負債表                ➡️  代號 (Action Code): t164sb03
+📋 功能: 綜合損益表                ➡️  代號 (Action Code): t164sb04
+📋 功能: 現金流量表                ➡️  代號 (Action Code): t164sb05
+📋 功能: 權益變動表                ➡️  代號 (Action Code): t164sb06
+📋 功能: 簡明綜合損益表(四季)          ➡️  代號 (Action Code): t163sb15
+📋 功能: 簡明資產負債表(四季)          ➡️  代號 (Action Code): t163sb16
+📋 功能: 簡明綜合損益表(三年)          ➡️  代號 (Action Code): t163sb17
+📋 功能: 簡明資產負債表(三年)          ➡️  代號 (Action Code): t163sb18
+📋 功能: 股利分派情形               ➡️  代號 (Action Code): t05st09_2
+📋 功能: 決定分配股息及紅利或其他利益       ➡️  代號 (Action Code): t108sb19_q1
+📋 功能: 財務報告書                ➡️  代號 (Action Code): t57sb01_q1
+📋 功能: 公開說明書                ➡️  代號 (Action Code): t57sb01_q3
+📋 功能: 董監事持股餘額明細資料          ➡️  代號 (Action Code): stapap1
+📋 功能: 內部人持股異動事後申報表         ➡️  代號 (Action Code): query6_1
+📋 功能: 法人說明會一覽表             ➡️  代號 (Action Code): t100sb02_1
+📋 功能: 赴大陸投資資訊              ➡️  代號 (Action Code): t05st15
+📋 功能: 投資海外子公司資訊            ➡️  代號 (Action Code): t05st16
