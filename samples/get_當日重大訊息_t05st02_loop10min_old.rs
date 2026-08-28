@@ -28,7 +28,7 @@ use std::time::Duration;
 use std::error::Error;
 use std::fs::OpenOptions;
 use std::path::Path;
-use chrono::{Datelike, Local, Timelike}; // 🎯 引入 Timelike 用於判斷小時
+use chrono::{Datelike, Local};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -70,32 +70,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // -----------------------------------------------------------------
         let csv_path = format!("mops_report_{}_{}_{}.csv", query_year, query_month, query_day);
 
-        // -----------------------------------------------------------------
-        // 🎯 冷啟動記憶核心：開機時，若當天 CSV 檔案已存在，自動讀取並重建索引
-        // -----------------------------------------------------------------
-        if visited_records.is_empty() && Path::new(&csv_path).exists() {
-            println!("📂 偵測到今日歷史備份 CSV 檔案已存在，正在自動讀取重建記憶體索引...");
-            let file = OpenOptions::new().read(true).open(&csv_path)?;
-            let mut csv_reader = csv::Reader::from_reader(file);
-            let mut history_count = 0;
-            // 逐行讀取 CSV 資料 (欄位順序: 發言日期, 發言時間, 公司代號, 公司簡稱, 主旨)
-            for result in csv_reader.records() {
-                if let Ok(record) = result {
-                    // 確保欄位長度正確才解析，避免讀取到空白行損壞
-                    if record.len() >= 5 {
-                        let time = record[1].trim();
-                        let code = record[2].trim();
-                        // 還原唯一識別碼格式: 公司代號_發言時間
-                        let unique_key = format!("{}_{}", code, time);
-                        visited_records.insert(unique_key);
-                        history_count += 1;
-                    }
-                }
-            }
-            println!("✅ 今日索引重建成功！已自動同步過濾 {} 筆歷史重大訊息。", history_count);
-        }
-
-
         // 初始化當天專屬的 CSV 檔案（如果檔案不存在就建立並寫入 Excel 不亂碼的 BOM 與表頭）
         if !Path::new(&csv_path).exists() {
             println!("📝 正在建立今日專屬 CSV 資料庫：{}", csv_path);
@@ -106,7 +80,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let mut csv_writer = csv::Writer::from_writer(buffered_file);
             csv_writer.write_record(&["發言日期", "發言時間", "公司代號", "公司簡稱", "主旨"])?;
             csv_writer.flush()?;
+        } else {
+            println!("📂 偵測到本地已存在歷史備份 CSV 檔案，正在讀取並重建記憶體索引...");
+            // 使用普通唯讀模式打開，防止破壞檔案
+            let file = OpenOptions::new().read(true).open(&csv_path)?;
+            let mut csv_reader = csv::Reader::from_reader(file);
+        
+            let mut history_count = 0;
+            // 逐行讀取 CSV 資料 (欄位順序: 發言日期, 發言時間, 公司代號, 公司簡稱, 主旨)
+            for result in csv_reader.records() {
+                if let Ok(record) = result {
+                    // 確保欄位長度正確才解析，避免讀取到空白行損壞
+                    if record.len() >= 5 {
+                        let time = record[1].trim();
+                        let code = record[2].trim();
+                    
+                        // 還原唯一識別碼格式: 公司代號_發言時間
+                        let unique_key = format!("{}_{}", code, time);
+                        visited_records.insert(unique_key);
+                        history_count += 1;
+                    }
+                }
+            }
+            println!("✅ 記憶體索引重建成功！已自動同步並過濾 {} 筆歷史重大訊息。", history_count);
         } 
+
 
         println!("🕒 [{}] 正在發起常規巡檢...", now.format("%Y-%m-%d %H:%M:%S"));
 
@@ -119,28 +117,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     println!("😴 巡檢完畢。全市場暫無新重大訊息更新。");
                 }
             },
-            Err(e) => {
-                eprintln!("⚠️ 本次巡檢發生網路或解析錯誤: {}，系統將於下個週期自動重試。", e);
-                // 這裡加入防禦性冷卻休眠，防止因為斷網或連線過快被封鎖時，狂暴循環撞伺服器
-                tokio::time::sleep(Duration::from_secs(10)).await;
-            },
+            Err(e) => eprintln!("⚠️ 本次巡檢發生網路或解析錯誤: {}，系統將於下個週期自動重試。", e),
         }
 
         // 3. 定時器核心：執行緒安全休眠 10 分鐘 (600 秒)
-        // -----------------------------------------------------------------
-        // 🎯 智慧時段判定核心：晚上 21:00 至 隔天清晨 07:00 休眠 30 分鐘，其餘時段 10 分鐘
-        // -----------------------------------------------------------------
-        let current_hour = now.hour();
-        let sleep_duration = if current_hour >= 21 || current_hour < 7 {
-            println!("🌙 當前處於夜間非尖峰時段 (21:00 - 07:00)，巡檢週期自動調整為【 30 分鐘 】");
-            Duration::from_secs(1800) // 30 分鐘 = 1800 秒
-        } else {
-            println!("☀️ 當前處於日間股市交易高峰時段，巡檢週期維持【 10 分鐘 】");
-            Duration::from_secs(600)  // 10 分鐘 = 600 秒
-        };
-
-        println!("💤 進入休眠，下一次巡檢將在等待後自動啟動...\n-----------------------------------------------------");
-        tokio::time::sleep(sleep_duration).await;
+        println!("💤 進入休眠，10 分鐘後將自動進行下一次追蹤...\n-----------------------------------------------------");
+        tokio::time::sleep(Duration::from_secs(600)).await;
     }
 }
 
@@ -188,8 +170,6 @@ async fn fetch_and_parse_mops(
 
     let res_obj = client.post(api_url).form(&params).send().await.map_err(|e| Box::new(e) as Box<dyn Error>)?;
     let response_text = res_obj.text().await.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-
-    println!("response_text = {}", response_text);
     
     // 載入 DOM 樹進行網頁數據格子清洗
     let document = Html::parse_document(&response_text);
