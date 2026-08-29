@@ -238,7 +238,8 @@ async fn fetch_and_parse_mops(
             let code = &cells[2];     // 公司代號 (例: 7850)
             let name = &cells[3];     // 公司簡稱 (例: 寶泰生醫)
             let subject = &cells[4];  // 主旨
-
+            let subject = subject.replace('\n', " ").replace('\r', " ");
+            
             // 數據特徵校準
             if date.contains('/') && code.chars().all(|c| c.is_digit(10)) && !code.is_empty() {
                 
@@ -250,13 +251,14 @@ async fn fetch_and_parse_mops(
                     visited.insert(unique_key.clone());
 
                     // 實時追加寫入 CSV (維持純文字乾淨格式)
-                    csv_writer.write_record(&[date, time, code, name, subject])?;
+                    csv_writer.write_record(&[date, time, code, name, &subject])?;
 
-                    let truncated_subject = if subject.chars().count() > 35 {
-                        format!("{}...", subject.chars().take(35).collect::<String>())
-                    } else {
-                        subject.to_string()
-                    };
+                    //let truncated_subject = if subject.chars().count() > 35 {
+                    //    format!("{}...", subject.chars().take(35).collect::<String>())
+                    //} else {
+                    //    subject.to_string()
+                    //};
+                    let truncated_subject =subject.to_string();
                     
                     // 🎯 核心高亮邏輯：判定是否符合訂閱股票或觸發關鍵字
                     let is_subscribed_stock = subscribed_stocks.contains(code);
